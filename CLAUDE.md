@@ -4,6 +4,20 @@ An AI-powered conversational shopping assistant that lets customers find product
 
 ---
 
+## Working Guidelines for Claude
+
+> These rules apply in every session.
+
+1. **Always share a plan before writing code.** Wait for confirmation before implementing.
+2. **Go step by step.** Do not scaffold multiple features at once. One logical unit at a time.
+3. **After every change, provide:**
+   - What was built and why
+   - What files were added or modified
+   - Exact steps to test the change (curl commands, browser steps, expected output)
+4. **Update this file** (`CLAUDE.md`) at the end of every session — tick off completed items and add new endpoints or decisions.
+
+---
+
 ## Project Structure
 
 ```
@@ -72,7 +86,7 @@ SHOPIFY_API_VERSION=2024-01
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
 | GET | `/api/health` | Done | Health check |
-| POST | `/api/chat` | Pending | SSE streaming chat endpoint |
+| POST | `/api/chat` | Done | SSE streaming chat endpoint |
 
 ---
 
@@ -84,15 +98,37 @@ SHOPIFY_API_VERSION=2024-01
 - [x] Server: `/api/health` endpoint
 - [x] Server: nodemon + tsx hot reload in dev
 - [x] ESLint + Prettier + Husky pre-commit hook (lint-staged)
+- [x] Shared types: `ChatMessage`, `Product`, `SearchProductsParams`, `StreamCallbacks`
+- [x] Shopify Admin GraphQL client + `productService.searchProducts()`
+- [x] OpenAI tool calling + SSE streaming (`OpenAIProvider`, `AIProvider` interface)
+- [x] `POST /api/chat` — streaming chat endpoint with Zod validation
 
-### In Progress
-- [ ] Prisma schema + PostgreSQL connection
-- [ ] Shopify Admin GraphQL client + product search service
-- [ ] OpenAI tool calling + SSE streaming chat endpoint
-- [ ] Shared types package (`packages/shared`)
-- [ ] React client setup
+### How to test POST /api/chat
+```bash
+# Basic product search
+curl -N -X POST http://localhost:3001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"show me some products"}]}'
+
+# Conversational refinement (price filter in follow-up)
+curl -N -X POST http://localhost:3001/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role":"user","content":"show me some products"},
+      {"role":"assistant","content":"Here are some products..."},
+      {"role":"user","content":"show me something under 500"}
+    ]
+  }'
+```
+Expected: live SSE stream of `token` events followed by a `products` event and a `done` event.
+
+### Pending
+- [ ] Shared types package (`packages/shared`) — extract when client setup begins
+- [ ] React client setup (`packages/client`)
 - [ ] Chat UI (ChatWindow, MessageList, MessageInput, ProductCard)
-- [ ] Docker Compose (server + client + postgres)
+- [ ] Prisma schema + PostgreSQL — Phase 2
+- [ ] Docker Compose (server + client + postgres) — after both packages work
 
 ---
 
@@ -107,6 +143,20 @@ SHOPIFY_API_VERSION=2024-01
 **AIProvider interface** — OpenAI is wrapped behind an interface so swapping to Anthropic or Gemini requires no changes to the chat controller.
 
 **Tool calling loop** — the OpenAI provider runs a `while(true)` loop: stream tokens → if `finish_reason === tool_calls`, execute the Shopify search tool and feed results back → continue streaming until `finish_reason === stop`.
+
+**SSE disconnect detection — use `res`, not `req`** — In Express SSE endpoints, always watch `res.on('close')` to detect client disconnects, never `req.on('close')`. The `req` close event fires as soon as the request body is fully read (immediately after `res.flushHeaders()`), which would set the closed flag before the response is even started. Use `res.writableEnded` as the primary guard before calling `res.write()` or `res.end()`.
+
+```typescript
+// WRONG — fires immediately after request body is read
+req.on('close', () => { closed = true; });
+
+// CORRECT — fires only when client actually drops the connection
+let clientGone = false;
+res.on('close', () => {
+  if (!res.writableEnded) clientGone = true;
+});
+// And use res.writableEnded as the guard for res.end() calls
+```
 
 ---
 
