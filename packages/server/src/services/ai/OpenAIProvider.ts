@@ -39,6 +39,7 @@ export class OpenAIProvider implements AIProvider {
       const toolCallBuffer: Record<number, { id: string; name: string; arguments: string }> = {};
 
       for await (const chunk of stream) {
+        // console.log("chunk===>",chunk.choices[0].delta)
         const choice = chunk.choices[0];
         if (!choice) continue;
 
@@ -57,6 +58,7 @@ export class OpenAIProvider implements AIProvider {
             if (!toolCallBuffer[idx]) {
               toolCallBuffer[idx] = { id: '', name: '', arguments: '' };
             }
+
             if (tc.id) toolCallBuffer[idx].id += tc.id;
             if (tc.function?.name) toolCallBuffer[idx].name += tc.function.name;
             if (tc.function?.arguments) toolCallBuffer[idx].arguments += tc.function.arguments;
