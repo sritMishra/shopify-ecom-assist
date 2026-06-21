@@ -1,22 +1,38 @@
+import { openai } from '@ai-sdk/openai';
+import type { CoreMessage, Message } from 'ai';
+import { convertToCoreMessages, streamText } from 'ai';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 
-import { aiService } from '../services/ai/ai.service';
+import { getSystemPrompt } from '../prompts/system.prompt';
+import { shopifyTools } from '../tools/shopify.tools';
 import logger from '../utils/logger';
 
 const chatRequestSchema = z.object({
   messages: z
     .array(
-      z.object({
-        role: z.enum(['user', 'assistant', 'system']),
-        content: z.string().min(1),
-      })
+      // passthrough preserves toolInvocations so convertToCoreMessages can reconstruct tool history
+      z
+        .object({
+          role: z.enum(['user', 'assistant']),
+          content: z.string(), // assistant messages after a tool call arrive with content: ""
+        })
+        .passthrough()
     )
     .min(1),
 });
 
-function sendSSE(res: Response, data: object) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+// Collapse consecutive same-role messages (e.g. two user messages with no assistant reply between
+// them) — OpenAI returns empty content when this happens. Keep the last message in each run.
+function deduplicateConsecutive(messages: CoreMessage[]): CoreMessage[] {
+  return messages.reduce<CoreMessage[]>((acc, msg) => {
+    if (acc.length > 0 && acc[acc.length - 1].role === msg.role) {
+      acc[acc.length - 1] = msg;
+    } else {
+      acc.push(msg);
+    }
+    return acc;
+  }, []);
 }
 
 export const chatController = {
@@ -27,43 +43,29 @@ export const chatController = {
       return;
     }
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-
-    // Use res.on('close') — not req.on('close').
-    // req.close fires as soon as the request body is read (immediately after flushHeaders),
-    // which would prevent res.end() from ever being called.
-    // res.close only fires when the client actually drops the connection mid-stream.
-    let clientGone = false;
-    res.on('close', () => {
-      if (!res.writableEnded) {
-        logger.warn('Client disconnected before stream finished');
-        clientGone = true;
-      }
-    });
-
     try {
-      await aiService.streamChat(parsed.data.messages, {
-        onToken: (token) => {
-          if (!clientGone) sendSSE(res, { type: 'token', content: token });
-        },
-        onProducts: (products) => {
-          if (!clientGone) sendSSE(res, { type: 'products', data: products });
-        },
-        onDone: () => {
-          if (!res.writableEnded) {
-            sendSSE(res, { type: 'done' });
-            res.end();
-          }
+      const systemPrompt = await getSystemPrompt();
+      const result = await streamText({
+        model: openai(process.env.OPENAI_MODEL ?? 'gpt-4o-mini'),
+        system: systemPrompt,
+        messages: deduplicateConsecutive(
+          convertToCoreMessages(parsed.data.messages as unknown as Message[])
+        ),
+        tools: shopifyTools,
+        // maxSteps allows the model to call tools and continue — replaces the manual while loop
+        maxSteps: 5,
+      });
+
+      result.pipeDataStreamToResponse(res, {
+        getErrorMessage: (err) => {
+          logger.error({ err }, 'Data stream error');
+          return err instanceof Error ? err.message : String(err);
         },
       });
     } catch (err) {
       logger.error({ err }, 'Chat stream error');
-      if (!res.writableEnded) {
-        sendSSE(res, { type: 'error', message: 'Something went wrong. Please try again.' });
-        res.end();
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Something went wrong. Please try again.' });
       }
     }
   },

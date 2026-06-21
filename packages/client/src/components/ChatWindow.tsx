@@ -1,12 +1,11 @@
 import { Box, Paper, Typography } from '@mui/material';
-
-import { useChat } from '@/hooks/useChat';
+import { useChat } from 'ai/react';
 
 import { MessageInput } from './MessageInput';
 import { MessageList } from './MessageList';
 
 export function ChatWindow() {
-  const { messages, isLoading, sendMessage } = useChat();
+  const { messages, isLoading, append } = useChat({ api: '/api/chat' });
 
   return (
     <Paper
@@ -27,7 +26,12 @@ export function ChatWindow() {
         </Typography>
       </Box>
       <MessageList messages={messages} isLoading={isLoading} />
-      <MessageInput onSend={sendMessage} disabled={isLoading} />
+      <MessageInput
+        onSend={(content) => {
+          if (!isLoading) void append({ role: 'user', content });
+        }}
+        disabled={isLoading}
+      />
     </Paper>
   );
 }

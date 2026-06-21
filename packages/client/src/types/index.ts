@@ -24,19 +24,3 @@ export interface Product {
   image: { url: string; altText: string | null } | null;
   url: string;
 }
-
-// ── SSE event shapes ─────────────────────────────────────────────────────────
-
-export type SSEEvent =
-  | { type: 'token'; content: string }
-  | { type: 'products'; data: Product[] }
-  | { type: 'done' }
-  | { type: 'error'; message: string };
-
-// ── Client-only UI model ─────────────────────────────────────────────────────
-
-export interface UIMessage extends ChatMessage {
-  id: string;
-  products?: Product[];
-  isStreaming?: boolean;
-}

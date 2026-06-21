@@ -31,9 +31,3 @@ export interface SearchProductsParams {
   tags?: string[];
   limit?: number;
 }
-
-export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onProducts: (products: Product[]) => void;
-  onDone: () => void;
-}

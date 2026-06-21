@@ -28,17 +28,22 @@ export function MessageInput({ onSend, disabled }: Props) {
     reset();
   };
 
+  const submit = () => void handleSubmit(onSubmit)();
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void handleSubmit(onSubmit)();
+      submit();
     }
   };
 
   return (
     <Box
       component="form"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
       sx={{ display: 'flex', gap: 1, p: 2, borderTop: 1, borderColor: 'divider' }}
     >
       <TextField
