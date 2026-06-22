@@ -1,6 +1,8 @@
-import { Box, CircularProgress, Paper, Typography } from '@mui/material';
+import { Box, CircularProgress, Link, Paper, Typography } from '@mui/material';
 import type { Message } from 'ai';
 import { useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import type { Product } from '@/types';
 
@@ -73,24 +75,67 @@ export function MessageList({ messages, isLoading }: Props) {
                 borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
               }}
             >
-              <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {msg.content}
-                {isStreaming && (
-                  <Box
-                    component="span"
-                    sx={{
-                      display: 'inline-block',
-                      width: '2px',
-                      height: '1em',
-                      bgcolor: 'currentcolor',
-                      ml: 0.5,
-                      verticalAlign: 'text-bottom',
-                      animation: 'blink 1s step-end infinite',
-                      '@keyframes blink': { '50%': { opacity: 0 } },
+              {msg.role === 'user' ? (
+                <Typography
+                  variant="body1"
+                  sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {msg.content}
+                </Typography>
+              ) : (
+                <Box
+                  sx={{
+                    wordBreak: 'break-word',
+                    fontSize: '1rem',
+                    lineHeight: 1.6,
+                    '& p': { m: 0, mb: 0.75 },
+                    '& p:last-child': { mb: 0 },
+                    '& h1,& h2,& h3,& h4': { mt: 1, mb: 0.5, fontWeight: 700 },
+                    '& h1': { fontSize: '1.1rem' },
+                    '& h2': { fontSize: '1rem' },
+                    '& h3,& h4': { fontSize: '0.9rem' },
+                    '& ul,& ol': { m: 0, mb: 0.75, pl: 2.5 },
+                    '& li': { mb: 0.25 },
+                    '& strong': { fontWeight: 700 },
+                    '& a': { color: 'inherit', textDecorationColor: 'currentcolor' },
+                    '& img': { display: 'none' },
+                  }}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href, children }) => (
+                        <Link
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          underline="hover"
+                        >
+                          {children}
+                        </Link>
+                      ),
+                      img: () => null,
                     }}
-                  />
-                )}
-              </Typography>
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                  {isStreaming && (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-block',
+                        width: '2px',
+                        height: '1em',
+                        bgcolor: 'currentcolor',
+                        ml: 0.5,
+                        verticalAlign: 'text-bottom',
+                        animation: 'blink 1s step-end infinite',
+                        '@keyframes blink': { '50%': { opacity: 0 } },
+                      }}
+                    />
+                  )}
+                </Box>
+              )}
             </Paper>
             {products.length > 0 && (
               <Box sx={{ mt: 1, width: '100%', maxWidth: 800 }}>

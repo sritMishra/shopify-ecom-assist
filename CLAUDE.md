@@ -16,6 +16,19 @@ An AI-powered conversational shopping assistant that lets customers find product
    - Exact steps to test the change (curl commands, browser steps, expected output)
 4. **Update this file** (`CLAUDE.md`) at the end of every session — tick off completed items and add new endpoints or decisions.
 
+### Production-First Engineering Standard
+
+> Every architectural decision, data storage choice, caching strategy, and infrastructure pattern must be evaluated as if this app will serve **millions of concurrent users** (lakhs to crores of visitors). "Good enough for dev" is not acceptable. Ask: *would this hold under 100k req/min? would this survive a pod restart? would this work across 10 server instances?*
+
+Specifically, this means:
+- **No in-memory state** for anything that must survive restarts or scale horizontally (use Redis, PostgreSQL, or a proper distributed store)
+- **No single points of failure** — every external call (Shopify, OpenAI) needs timeouts, retries, and circuit breakers
+- **Stateless server processes** — any server instance must be able to handle any request without local state
+- **Cache with invalidation** — TTL-only caching is a starting point; production needs event-driven invalidation (webhooks)
+- **Observability from day one** — structured logging (already using Pino), metrics, and distributed tracing before going live
+- **Rate limiting and abuse protection** — per-user, per-store, and global limits on all API endpoints
+- **Cost awareness** — every OpenAI call has a price; design prompts and caching to minimise unnecessary LLM calls
+
 ---
 
 ## Project Structure
