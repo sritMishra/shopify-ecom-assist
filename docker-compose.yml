@@ -1,0 +1,43 @@
+# docker-compose.yml
+# Defines the local development services for this project.
+# Run with: docker compose up -d
+# Stop with: docker compose down
+
+services:
+  postgres:
+    # pgvector/pgvector:pg16 is the official PostgreSQL 16 image
+    # with the pgvector extension pre-installed.
+    # Regular postgres:16 image does NOT have pgvector — this one does.
+    image: pgvector/pgvector:pg16
+
+    # Container name — used when connecting via docker exec or logs
+    container_name: shopify_assistant_db
+
+    # Environment variables that PostgreSQL reads on first startup
+    # to create the default database and user.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shopify_assistant
+
+    # Map port 5432 inside the container to port 5432 on your machine.
+    # Format is "host_port:container_port"
+    # This is why DATABASE_URL uses localhost:5432 — it hits this container.
+    ports:
+      - '5432:5432'
+
+    # Named volume — PostgreSQL stores its data files here.
+    # This means your data survives `docker compose down` and restarts.
+    # Without this, all data is lost every time the container stops.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Restart the container automatically if it crashes.
+    # 'unless-stopped' means it restarts on crash but NOT when you
+    # manually run `docker compose down`.
+    restart: unless-stopped
+
+# Declare the named volume used above.
+# Docker manages this volume — you don't need to create anything manually.
+volumes:
+  postgres_data:
