@@ -5,6 +5,9 @@ const STORE_CONTEXT_QUERY = `
   query StoreContext {
     shop {
       name
+      primaryDomain {
+        url
+      }
     }
     collections(first: 30) {
       edges {
@@ -22,13 +25,14 @@ const STORE_CONTEXT_QUERY = `
 `;
 
 interface StoreContextResponse {
-  shop: { name: string };
+  shop: { name: string; primaryDomain: { url: string } };
   collections: { edges: { node: { title: string } }[] };
   productTypes: { edges: { node: string }[] };
 }
 
 export interface StoreContext {
   shopName: string;
+  storeUrl: string;
   collections: string[];
   productTypes: string[];
 }
@@ -46,15 +50,13 @@ export async function getStoreContext(): Promise<StoreContext> {
 
   const value: StoreContext = {
     shopName: data.shop.name,
+    storeUrl: data.shop.primaryDomain.url,
     collections: data.collections.edges.map((e) => e.node.title).filter(Boolean),
     productTypes: data.productTypes.edges.map((e) => e.node).filter(Boolean),
   };
 
   cached = { value, expiresAt: Date.now() + CACHE_TTL_MS };
-  logger.info(
-    { shopName: value.shopName, productTypes: value.productTypes, collections: value.collections },
-    'Store context cached'
-  );
+  logger.info({ shopName: value.shopName }, 'Store context cached');
 
   return value;
 }

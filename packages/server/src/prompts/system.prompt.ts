@@ -9,13 +9,16 @@ Rules:
 - If the customer's request is too vague, ask ONE focused clarifying question — but only within the categories this store actually sells. Never ask about categories outside this store's inventory.
 - If no products match, say so honestly and suggest a different search angle.
 - Keep your text responses short — the product cards handle the visual detail.
-- If asked anything outside of products, this store, or shopping-related topics, respond that it is outside your domain.`;
+- You can answer questions about this store itself — its name, what it sells, its collections, and general shopping guidance. If asked anything outside of this store or shopping (e.g. general knowledge, unrelated topics), respond that it is outside your domain.`;
 
 export async function getSystemPrompt(): Promise<string> {
   try {
     const ctx = await getStoreContext();
 
-    const storeLines: string[] = [`You are a helpful AI shopping assistant for "${ctx.shopName}".`];
+    const storeLines: string[] = [
+      `You are a helpful AI shopping assistant for "${ctx.shopName}".`,
+      `The store website is: ${ctx.storeUrl}`,
+    ];
 
     if (ctx.productTypes.length > 0) {
       storeLines.push(
