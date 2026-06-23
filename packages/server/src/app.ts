@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 
 import chatRouter from './routes/chat.route';
+import syncRouter from './routes/sync.route';
 import logger from './utils/logger';
 
 const app = express();
@@ -18,5 +19,6 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/chat', chatRouter);
+app.use('/api/sync', syncRouter);
 
 export default app;
