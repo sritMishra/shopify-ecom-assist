@@ -1,0 +1,88 @@
+// schema.prisma
+// This file is the single source of truth for your database structure.
+// Prisma reads this file to:
+//   1. Generate the TypeScript client (so you get type-safe DB queries)
+//   2. Create migration files (the actual SQL that builds the tables)
+
+// ---------------------------------------------------------------------------
+// Generator
+// Tells Prisma to generate a JavaScript/TypeScript client.
+// After any schema change, run: npx prisma generate
+// This regenerates the client so TypeScript knows about your new tables/fields.
+// ---------------------------------------------------------------------------
+generator client {
+  provider        = "prisma-client-js"
+  // previewFeatures is required to enable pgvector (the "postgresqlExtensions" feature)
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// ---------------------------------------------------------------------------
+// Datasource
+// Tells Prisma which database to connect to.
+// The url comes from your .env file — DATABASE_URL.
+// extensions = [vector] tells Prisma that pgvector is installed on this DB.
+// Prisma will run `CREATE EXTENSION IF NOT EXISTS vector` during migration.
+// ---------------------------------------------------------------------------
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ---------------------------------------------------------------------------
+// ProductEmbedding table
+// One row per Shopify product.
+// Stores the product's metadata (for filtering) and its embedding (for search).
+// ---------------------------------------------------------------------------
+model ProductEmbedding {
+  // Auto-incrementing integer — internal primary key
+  id Int @id @default(autoincrement())
+
+  // The Shopify product GID e.g. "gid://shopify/Product/123456789"
+  // Unique — ensures we never store two rows for the same product.
+  // Used to look up and update a product when a webhook fires.
+  shopifyId String @unique @map("shopify_id")
+
+  // Product title — stored here so we can display results without
+  // making an extra Shopify API call for each result.
+  title String
+
+  // Product type e.g. "Supplements", "T-Shirts"
+  // Optional because some products may have no type set.
+  // Used as a hard filter: WHERE product_type = 'Supplements'
+  productType String? @map("product_type")
+
+  // Product tags e.g. ["protein", "post-workout", "chocolate"]
+  // Stored as a PostgreSQL array for efficient filtering.
+  // Used as a hard filter: WHERE 'protein' = ANY(tags)
+  tags String[]
+
+  // Minimum variant price — used for price range filtering.
+  // e.g. WHERE price_min <= 500
+  priceMin Float? @map("price_min")
+
+  // Maximum variant price — stored for display in product cards.
+  priceMax Float? @map("price_max")
+
+  // Shopify product handle e.g. "gold-standard-whey"
+  // Used to build the product URL: /products/{handle}
+  handle String?
+
+  // URL of the product's featured image — for product cards in the UI.
+  imageUrl String? @map("image_url")
+
+  // The embedding vector — 1536 floating point numbers from OpenAI.
+  // This is the core of Phase 2. Prisma doesn't natively support this type
+  // so we use Unsupported("vector(1536)") — Prisma passes it through as-is
+  // to PostgreSQL. We use raw SQL queries for similarity search.
+  // Cannot be null — a product without an embedding is useless for vector search.
+  embedding Unsupported("vector(1536)")
+
+  // Timestamp of the last time this product was synced and embedded.
+  // Useful for debugging and for knowing which products need a re-sync.
+  syncedAt DateTime @default(now()) @map("synced_at")
+
+  // Prisma maps this model to the "product_embeddings" table in PostgreSQL.
+  // By default Prisma would name it "ProductEmbedding" — the @@map overrides that.
+  @@map("product_embeddings")
+}
