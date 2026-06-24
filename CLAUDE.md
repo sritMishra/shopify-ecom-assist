@@ -100,12 +100,13 @@ SHOPIFY_API_VERSION=2024-01
 |--------|------|--------|-------------|
 | GET | `/api/health` | Done | Health check |
 | POST | `/api/chat` | Done | SSE streaming chat endpoint |
+| POST | `/api/sync/products` | Done | Trigger full product embedding sync into pgvector |
 
 ---
 
 ## Implementation Progress
 
-### Done
+### Phase 1 — Done
 - [x] npm workspaces monorepo setup
 - [x] Server: Express + TypeScript + Pino logging + Zod + dotenv
 - [x] Server: `/api/health` endpoint
@@ -115,6 +116,21 @@ SHOPIFY_API_VERSION=2024-01
 - [x] Shopify Admin GraphQL client + `productService.searchProducts()`
 - [x] OpenAI tool calling + SSE streaming (`OpenAIProvider`, `AIProvider` interface)
 - [x] `POST /api/chat` — streaming chat endpoint with Zod validation
+- [x] Store context: shop name + primary domain URL + product types + collections in system prompt
+- [x] System prompt: AI can answer store-related questions (name, URL); only refuses truly off-topic queries
+
+### Phase 2 — In Progress
+- [x] Docker Compose — PostgreSQL + pgvector (`docker-compose.yml` at project root)
+- [x] `pgvector` npm package installed in server
+- [x] Prisma schema — `product_embeddings` table with `vector(1536)` column
+- [x] Database migration ran — table + pgvector extension active
+- [x] `src/lib/db.ts` — Prisma client singleton
+- [x] `src/services/embedding.service.ts` — `buildEmbeddingDocument()` + `generateEmbeddings()` via Vercel AI SDK
+- [x] `src/services/product-sync.service.ts` — cursor-paginated Shopify fetch → embed → upsert pipeline
+- [x] `POST /api/sync/products` — manual sync trigger (19 products synced and embedded)
+- [ ] `src/services/vector-search.service.ts` — cosine similarity search via pgvector `<=>` operator
+- [ ] Wire vector search into `search_products` tool (replace/augment Shopify keyword search)
+- [ ] Shopify webhook handler — incremental re-sync on product create/update/delete
 
 ### How to test POST /api/chat
 ```bash
@@ -136,12 +152,17 @@ curl -N -X POST http://localhost:3001/api/chat \
 ```
 Expected: live SSE stream of `token` events followed by a `products` event and a `done` event.
 
-### Pending
+### How to trigger product sync
+```bash
+curl -X POST http://localhost:3001/api/sync/products
+```
+Expected: `{ "success": true, "synced": 19, "failed": 0 }`
+Must be run whenever products are added/changed until webhook handler (Step 7) is implemented.
+
+### Pending (non-Phase-2)
 - [ ] Shared types package (`packages/shared`) — extract when client setup begins
 - [ ] React client setup (`packages/client`)
 - [ ] Chat UI (ChatWindow, MessageList, MessageInput, ProductCard)
-- [ ] Prisma schema + PostgreSQL — Phase 2
-- [ ] Docker Compose (server + client + postgres) — after both packages work
 
 ---
 
@@ -173,11 +194,27 @@ res.on('close', () => {
 
 ---
 
+## Key Files Added in Phase 2
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | PostgreSQL + pgvector container |
+| `packages/server/prisma/schema.prisma` | Database schema |
+| `packages/server/prisma/migrations/*/migration.sql` | Migration history |
+| `packages/server/src/lib/db.ts` | Prisma singleton — import `prisma` from here |
+| `packages/server/src/services/embedding.service.ts` | `buildEmbeddingDocument()`, `generateEmbeddings()` |
+| `packages/server/src/services/product-sync.service.ts` | `syncAllProducts()` — full Shopify → pgvector pipeline |
+| `packages/server/src/routes/sync.route.ts` | `POST /api/sync/products` |
+| `docs/phase-2/phase-2.md` | Problem statement + architecture decisions |
+| `docs/phase-2/implementation.md` | Step-by-step implementation log |
+
+---
+
 ## Phase Roadmap
 
 | Phase | Feature | Status |
 |-------|---------|--------|
-| 1 | Natural language product search, recommendations, conversational refinement, product cards | In progress |
-| 2 | Semantic search with OpenAI embeddings + pgvector | Pending |
+| 1 | Natural language product search, recommendations, conversational refinement, product cards | ✅ Done |
+| 2 | Semantic search with OpenAI embeddings + pgvector | 🔄 In progress |
 | 3 | RAG over store knowledge (FAQs, policies, collections) | Pending |
 | 4 | Session memory + personalized recommendations | Pending |
