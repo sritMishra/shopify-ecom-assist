@@ -128,7 +128,7 @@ SHOPIFY_API_VERSION=2024-01
 - [x] `src/services/embedding.service.ts` — `buildEmbeddingDocument()` + `generateEmbeddings()` via Vercel AI SDK
 - [x] `src/services/product-sync.service.ts` — cursor-paginated Shopify fetch → embed → upsert pipeline
 - [x] `POST /api/sync/products` — manual sync trigger (19 products synced and embedded)
-- [ ] `src/services/vector-search.service.ts` — cosine similarity search via pgvector `<=>` operator
+- [x] `src/services/vector-search.service.ts` — cosine similarity search via pgvector `<=>` operator, null-safe hard filters, cosine distance score logging
 - [ ] Wire vector search into `search_products` tool (replace/augment Shopify keyword search)
 - [ ] Shopify webhook handler — incremental re-sync on product create/update/delete
 

@@ -10,7 +10,7 @@
 | 2 | Prisma schema — `product_embeddings` table | ✅ Done |
 | 3 | Database migration | ✅ Done |
 | 4 | ProductSyncService + sync endpoint | ✅ Done |
-| 5 | VectorSearchService | 🔲 Next |
+| 5 | VectorSearchService | ✅ Done |
 | 6 | Wire vector search into chat tool | 🔲 Pending |
 | 7 | Shopify webhook handler (incremental sync) | 🔲 Pending |
 
@@ -232,29 +232,112 @@ If you switched to a poor embedding model trained on less data, the vectors woul
 
 ---
 
-### Plan: one new file
+### Implementation ✅
 
 **File:** `packages/server/src/services/vector-search.service.ts`
 
-Takes a user query string, embeds it using the same OpenAI model, applies optional hard filters (productType, price) as SQL WHERE clauses, then ranks the filtered pool by cosine distance. Returns products in the same `Product` shape the chat tool already expects.
+Exports one function: `searchByVector(params: SearchProductsParams): Promise<Product[]>`
+
+Takes the same `SearchProductsParams` shape as the existing Shopify keyword search — so wiring into the chat tool in Step 6 requires minimal changes.
+
+---
+
+### The cosine similarity line
+
+This is the single line that does all the semantic comparison:
 
 ```sql
--- Hard filters run first (exact SQL match — fully predictable)
--- Vector ranking runs on the filtered pool (semantic — flexible)
-SELECT *
-FROM product_embeddings
-WHERE product_type = $1          -- optional hard filter
-  AND price_min <= $2            -- optional price filter
-ORDER BY embedding <=> $3::vector  -- cosine similarity ranking
-LIMIT 5;
+ORDER BY embedding <=> ${vectorStr}::vector
 ```
 
-**Supported filters:**
+- `embedding` — the stored 1536-number vector for each product (written at sync time)
+- `<=>` — pgvector's cosine distance operator
+- `${vectorStr}::vector` — the user's query embedded into 1536 numbers at search time, cast to vector type
 
-| Filter | Mechanism |
+PostgreSQL computes the angle between every product's stored vector and the query vector, then sorts ascending. Smallest angle = most similar meaning = first result.
+
+---
+
+### Null-safe filter pattern
+
+`Prisma.sql` and `Prisma.join` are not accessible as static properties in Prisma 5.21. Instead, all optional hard filters use a null-safe WHERE pattern:
+
+```sql
+WHERE (${filterType}::text IS NULL OR product_type = ${filterType}::text)
+  AND (${filterMin}::float8 IS NULL OR price_min >= ${filterMin}::float8)
+  AND (${filterMax}::float8 IS NULL OR price_min <= ${filterMax}::float8)
+```
+
+When a filter is not provided, its value is `null`:
+- `NULL IS NULL` → `true` → the entire condition is skipped
+- When set: evaluates the real check
+
+This means the same SQL covers all filter combinations without any dynamic query building. All values are safely parameterised — no SQL injection risk.
+
+---
+
+### Cosine distance score logging
+
+The `cosine_distance` score is selected alongside results so you can inspect semantic relevance:
+
+```sql
+embedding <=> ${vectorStr}::vector AS cosine_distance
+```
+
+Server logs on every vector search:
+```
+🎯 Vector search scores:
+  [0.0821] Endopump / Pump Enhancer      ← very similar
+  [0.1034] Flight / Pre Workout
+  [0.1245] Creatine Monohydrate
+  [0.8932] Classic Cotton T-Shirt        ← completely different
+```
+
+| Score range | Meaning |
 |---|---|
-| `productType` | `WHERE product_type = $1` |
-| `minPrice` / `maxPrice` | `WHERE price_min >= $2 AND price_min <= $3` |
-| `limit` | `LIMIT N` |
+| 0.0 – 0.2 | Strong semantic match |
+| 0.2 – 0.5 | Somewhat related |
+| 0.5 – 1.0 | Loosely related or unrelated |
+| 1.0+ | Completely different concept |
 
-Returns the same `Product` type the chat already uses — `id`, `title`, `price`, `image`, `url`, `tags` — so Step 6 is a drop-in swap with no changes to the AI or the SSE stream.
+---
+
+### Fallback when no query text
+
+If the user provides filters but no semantic query (e.g. "show me all supplements under 500"), embedding is skipped and results are ordered by price instead of similarity:
+
+```sql
+ORDER BY price_min ASC
+```
+
+---
+
+### Tested via temporary endpoint
+
+`POST /api/sync/search-test` was added to `sync.route.ts` to test vector search in isolation before wiring into chat. Will be removed after Step 6.
+
+```bash
+curl -s -X POST http://localhost:3001/api/sync/search-test \
+  -H "Content-Type: application/json" \
+  -d '{"query":"something similar to pre-workout","limit":3}' | jq .
+```
+
+Confirmed result: returned Endopump, Flight Pre-Workout, and Creatine — semantically related products found without any keyword overlap.
+
+---
+
+## Step 6 — Wire vector search into chat tool 🔲 (Next)
+
+**Plan:** Modify `packages/server/src/tools/shopify.tools.ts`
+
+Replace the `productService.searchProducts()` call inside the `search_products` tool with `searchByVector()`. The tool's parameters, the AI's behaviour, and the SSE stream all stay exactly the same. Only what happens inside the `execute` function changes.
+
+```typescript
+// Before (Phase 1)
+const results = await productService.searchProducts(args);
+
+// After (Phase 2)
+const results = await searchByVector(args);
+```
+
+The `searchByVector` function accepts the same `SearchProductsParams` shape so no other changes are needed.
