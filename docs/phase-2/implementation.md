@@ -11,7 +11,7 @@
 | 3 | Database migration | ✅ Done |
 | 4 | ProductSyncService + sync endpoint | ✅ Done |
 | 5 | VectorSearchService | ✅ Done |
-| 6 | Wire vector search into chat tool | 🔲 Pending |
+| 6 | Wire vector search into chat tool | ✅ Done |
 | 7 | Shopify webhook handler (incremental sync) | 🔲 Pending |
 
 ---

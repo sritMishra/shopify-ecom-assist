@@ -129,7 +129,7 @@ SHOPIFY_API_VERSION=2024-01
 - [x] `src/services/product-sync.service.ts` — cursor-paginated Shopify fetch → embed → upsert pipeline
 - [x] `POST /api/sync/products` — manual sync trigger (19 products synced and embedded)
 - [x] `src/services/vector-search.service.ts` — cosine similarity search via pgvector `<=>` operator, null-safe hard filters, cosine distance score logging
-- [ ] Wire vector search into `search_products` tool (replace/augment Shopify keyword search)
+- [x] Wire vector search into `search_products` tool — `shopify.tools.ts` now calls `searchByVector()` instead of `productService.searchProducts()`
 - [ ] Shopify webhook handler — incremental re-sync on product create/update/delete
 
 ### How to test POST /api/chat
