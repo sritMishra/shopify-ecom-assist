@@ -7,6 +7,8 @@ interface Props {
 }
 
 function formatPrice(amount: number, currencyCode: string): string {
+  // Guard against empty/invalid currency code from vector search results
+  if (!currencyCode) return amount.toFixed(2);
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(
     amount
   );

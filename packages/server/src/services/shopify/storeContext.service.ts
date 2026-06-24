@@ -5,6 +5,7 @@ const STORE_CONTEXT_QUERY = `
   query StoreContext {
     shop {
       name
+      currencyCode
       primaryDomain {
         url
       }
@@ -25,13 +26,14 @@ const STORE_CONTEXT_QUERY = `
 `;
 
 interface StoreContextResponse {
-  shop: { name: string; primaryDomain: { url: string } };
+  shop: { name: string; currencyCode: string; primaryDomain: { url: string } };
   collections: { edges: { node: { title: string } }[] };
   productTypes: { edges: { node: string }[] };
 }
 
 export interface StoreContext {
   shopName: string;
+  currencyCode: string;
   storeUrl: string;
   collections: string[];
   productTypes: string[];
@@ -50,6 +52,7 @@ export async function getStoreContext(): Promise<StoreContext> {
 
   const value: StoreContext = {
     shopName: data.shop.name,
+    currencyCode: data.shop.currencyCode,
     storeUrl: data.shop.primaryDomain.url,
     collections: data.collections.edges.map((e) => e.node.title).filter(Boolean),
     productTypes: data.productTypes.edges.map((e) => e.node).filter(Boolean),

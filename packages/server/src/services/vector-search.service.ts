@@ -16,6 +16,7 @@
 import { prisma } from '../lib/db';
 import type { Product, SearchProductsParams } from '../types';
 import { generateEmbeddings } from './embedding.service';
+import { getStoreContext } from './shopify/storeContext.service';
 
 // Shape of a raw row returned from the product_embeddings table.
 // We don't SELECT the embedding column — it's large and not needed after search.
@@ -38,7 +39,7 @@ interface ProductRow {
 // vector DB — they are defaulted here. If they become important later,
 // add them as columns to the schema and re-sync.
 // ---------------------------------------------------------------------------
-function rowToProduct(row: ProductRow): Product {
+function rowToProduct(row: ProductRow, currencyCode: string): Product {
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN ?? '';
 
   return {
@@ -53,13 +54,11 @@ function rowToProduct(row: ProductRow): Product {
     price: {
       min: {
         amount: row.price_min ?? 0,
-        // Currency code is not stored in the vector DB.
-        // The chat displays the amount — currency is cosmetic for now.
-        currencyCode: '',
+        currencyCode,
       },
       max: {
         amount: row.price_max ?? 0,
-        currencyCode: '',
+        currencyCode,
       },
     },
     image: row.image_url ? { url: row.image_url, altText: null } : null,
@@ -83,6 +82,9 @@ function rowToProduct(row: ProductRow): Product {
 // ---------------------------------------------------------------------------
 export async function searchByVector(params: SearchProductsParams): Promise<Product[]> {
   const { query, minPrice, maxPrice, productType, limit = 5 } = params;
+
+  // Fetch store currency from cached store context — no extra API call in practice
+  const { currencyCode } = await getStoreContext();
 
   // Null-safe filter values — null means "no filter applied"
   const filterType = productType ?? null;
@@ -121,7 +123,7 @@ export async function searchByVector(params: SearchProductsParams): Promise<Prod
       console.log(`  [${r.cosine_distance?.toFixed(4)}] ${r.title}`);
     });
 
-    return rows.map(rowToProduct);
+    return rows.map((r) => rowToProduct(r, currencyCode));
   }
 
   // --- Fallback: no query text — apply hard filters only, order by price -----
@@ -136,5 +138,5 @@ export async function searchByVector(params: SearchProductsParams): Promise<Prod
     LIMIT ${limit}
   `;
 
-  return rows.map(rowToProduct);
+  return rows.map((r) => rowToProduct(r, currencyCode));
 }

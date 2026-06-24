@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 
-import { productService } from '../services/shopify/product.service';
+import { searchByVector } from '../services/vector-search.service';
 import logger from '../utils/logger';
 
 export const shopifyTools = {
@@ -14,7 +14,7 @@ export const shopifyTools = {
         .optional()
         .default('')
         .describe(
-          'Search keywords e.g. "running shoes", "blue cotton shirt", "whey protein". Omit or pass empty string to search all products.'
+          'Describe what the customer is looking for in natural language e.g. "something for muscle recovery", "gentle on stomach energy boost", "similar to pre-workout". The search understands meaning — not just keywords.'
         ),
       minPrice: z.number().optional().describe('Minimum price in store currency'),
       maxPrice: z.number().optional().describe('Maximum price in store currency'),
@@ -23,10 +23,10 @@ export const shopifyTools = {
       limit: z.number().optional().describe('Number of results to return (default 5, max 10)'),
     }),
     execute: async (args) => {
-      logger.info({ args }, 'search_products called');
       try {
-        const results = await productService.searchProducts(args);
-        logger.info({ count: results.length }, 'search_products returned');
+        // Phase 2: vector search — finds products by semantic meaning, not keywords.
+        // Same interface as Phase 1 productService.searchProducts() — drop-in swap.
+        const results = await searchByVector(args);
         return results;
       } catch (err) {
         logger.error({ err, args }, 'search_products failed');

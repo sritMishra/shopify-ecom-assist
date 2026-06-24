@@ -10,7 +10,6 @@
 import { Request, Response, Router } from 'express';
 
 import { syncAllProducts } from '../services/product-sync.service';
-import { searchByVector } from '../services/vector-search.service';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -31,20 +30,6 @@ router.post('/products', async (_req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, 'Product sync endpoint failed');
     res.status(500).json({ success: false, message: 'Sync failed. Check server logs.' });
-  }
-});
-
-// POST /api/sync/search-test
-// Temporary endpoint to test vector search in isolation before wiring into chat.
-// Remove after Step 6 is complete.
-router.post('/search-test', async (req: Request, res: Response) => {
-  const { query, productType, minPrice, maxPrice, limit } = req.body;
-  try {
-    const results = await searchByVector({ query, productType, minPrice, maxPrice, limit });
-    res.json({ query, count: results.length, results });
-  } catch (err) {
-    logger.error({ err }, 'Vector search test failed');
-    res.status(500).json({ message: 'Search failed. Check server logs.' });
   }
 });
 
