@@ -119,7 +119,7 @@ SHOPIFY_API_VERSION=2024-01
 - [x] Store context: shop name + primary domain URL + product types + collections in system prompt
 - [x] System prompt: AI can answer store-related questions (name, URL); only refuses truly off-topic queries
 
-### Phase 2 — In Progress
+### Phase 2 — Done
 - [x] Docker Compose — PostgreSQL + pgvector (`docker-compose.yml` at project root)
 - [x] `pgvector` npm package installed in server
 - [x] Prisma schema — `product_embeddings` table with `vector(1536)` column
@@ -130,7 +130,7 @@ SHOPIFY_API_VERSION=2024-01
 - [x] `POST /api/sync/products` — manual sync trigger (19 products synced and embedded)
 - [x] `src/services/vector-search.service.ts` — cosine similarity search via pgvector `<=>` operator, null-safe hard filters, cosine distance score logging
 - [x] Wire vector search into `search_products` tool — `shopify.tools.ts` now calls `searchByVector()` instead of `productService.searchProducts()`
-- [ ] Shopify webhook handler — incremental re-sync on product create/update/delete
+- [ ] Shopify webhook handler — incremental re-sync on product create/update/delete (deferred to post-Phase 2)
 
 ### How to test POST /api/chat
 ```bash
@@ -163,6 +163,26 @@ Must be run whenever products are added/changed until webhook handler (Step 7) i
 - [ ] Shared types package (`packages/shared`) — extract when client setup begins
 - [ ] React client setup (`packages/client`)
 - [ ] Chat UI (ChatWindow, MessageList, MessageInput, ProductCard)
+
+### Phase 6 — Multi-Tenant Productionization & Scale — Pending
+> Full detail: `docs/phase-6/phase-6.md`. Turns the single-store dev app into a multi-tenant SaaS
+> installable across many Shopify stores that survives real traffic.
+- [ ] Shopify OAuth install flow + `tenant_id` everywhere (foundation — currently single-store via `.env`)
+- [ ] Per-tenant config table + encrypted API-key storage + provider factory (OpenAI/Claude per store)
+- [ ] Rate limiting — per-user / per-tenant / global (Redis-backed); none exists today
+- [ ] Provider fallback + stronger retry/backoff + graceful degradation to keyword search
+- [ ] Token metering + quotas + usage dashboard (soft-warn 80%, throttle 100%)
+- [ ] Webhook-driven incremental sync + background job queue (BullMQ/SQS)
+- [ ] Semantic caching (Redis) + DB connection pooling (PgBouncer/Neon pooler)
+- [ ] Siloed dedicated-instance option for enterprise clients (later)
+
+**Open decisions (need sign-off before building):** billing model (BYO-key vs bundled tokens) ·
+data isolation (pooled `tenant_id` vs table-per-tenant) · embedding model locked to one default ·
+fallback provider (Claude / Azure OpenAI).
+
+**Key constraint:** chat provider is swappable per tenant; the **embedding model is not** —
+different models produce different-width, incompatible vectors, so changing it requires a full
+catalog re-embed. Lock it to one default for all tenants.
 
 ---
 
@@ -215,6 +235,12 @@ res.on('close', () => {
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 1 | Natural language product search, recommendations, conversational refinement, product cards | ✅ Done |
-| 2 | Semantic search with OpenAI embeddings + pgvector | 🔄 In progress |
+| 2 | Semantic search with OpenAI embeddings + pgvector | ✅ Done |
 | 3 | RAG over store knowledge (FAQs, policies, collections) | Pending |
 | 4 | Session memory + personalized recommendations | Pending |
+| 5 | Analytics dashboard — search queries, result quality, conversion tracking | Pending |
+| 6 | Multi-tenant productionization & scale (SaaS) — see `docs/phase-6/phase-6.md` | Pending |
+
+> **Phase 6 is a cross-cutting production track, not a feature phase.** It must largely land
+> *before* onboarding real paying clients, because it changes the data model (tenant identity),
+> the secrets model (per-tenant keys), and the request path (rate limiting, fallback, caching).
