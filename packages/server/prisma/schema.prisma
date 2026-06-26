@@ -74,6 +74,11 @@ model ProductEmbedding {
   // Null until the product is (re-)synced after this column was added.
   variantId String? @map("variant_id")
 
+  // All variants as JSON: [{ id, title, available }] — powers the storefront
+  // variant selector. Snapshot at sync time (availability/price can go stale —
+  // refreshed on re-sync / webhooks, like the rest of this cache).
+  variants Json? @map("variants")
+
   // URL of the product's featured image — for product cards in the UI.
   imageUrl String? @map("image_url")
 

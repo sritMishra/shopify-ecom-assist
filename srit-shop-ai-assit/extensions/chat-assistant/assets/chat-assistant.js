@@ -112,6 +112,7 @@
     if (!products || !products.length) return;
     var wrap = document.createElement('div');
     wrap.className = 'srit-products';
+
     products.forEach(function (p) {
       var card = document.createElement('div');
       card.className = 'srit-product';
@@ -123,29 +124,59 @@
         '<div class="srit-product-body">' +
           '<div class="srit-product-title">' + escapeHtml(p.title) + '</div>' +
           '<div class="srit-product-price">' + escapeHtml(formatPrice(p)) + '</div>' +
-          '<div class="srit-product-actions">' +
-            (p.url
-              ? '<a class="srit-product-link" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener noreferrer">View →</a>'
-              : '') +
-          '</div>' +
+          '<div class="srit-product-controls"></div>' +
         '</div>';
 
-      // Add-to-cart button — only when we have a variant id (synced products).
-      if (p.variantId) {
-        var actions = card.querySelector('.srit-product-actions');
+      var controls = card.querySelector('.srit-product-controls');
+      var variants = p.variants && p.variants.length ? p.variants : [];
+
+      // Variant selector — only when the product has more than one variant.
+      var select = null;
+      if (variants.length > 1) {
+        select = document.createElement('select');
+        select.className = 'srit-variant-select';
+        variants.forEach(function (v) {
+          var opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.available === false ? v.title + ' (sold out)' : v.title;
+          if (v.available === false) opt.disabled = true;
+          select.appendChild(opt);
+        });
+        controls.appendChild(select);
+      }
+
+      // Actions: view link + add to cart.
+      var actions = document.createElement('div');
+      actions.className = 'srit-product-actions';
+      if (p.url) {
+        var link = document.createElement('a');
+        link.className = 'srit-product-link';
+        link.href = p.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'View →';
+        actions.appendChild(link);
+      }
+
+      // Fall back to the default variant when there's no selector.
+      var defaultVariant = p.variantId || (variants[0] && variants[0].id) || null;
+      if (defaultVariant || select) {
         var btn = document.createElement('button');
         btn.className = 'srit-add-cart';
         btn.type = 'button';
         btn.textContent = 'Add to cart';
         btn.style.background = accent;
         btn.addEventListener('click', function () {
-          addToCart(p.variantId, btn);
+          var vid = select ? select.value : defaultVariant;
+          if (vid) addToCart(vid, btn);
         });
         actions.appendChild(btn);
       }
 
+      controls.appendChild(actions);
       wrap.appendChild(card);
     });
+
     messages.appendChild(wrap);
     scrollDown();
   }

@@ -42,10 +42,12 @@ const FETCH_ALL_PRODUCTS_QUERY = `
           featuredImage {
             url
           }
-          variants(first: 1) {
+          variants(first: 100) {
             edges {
               node {
                 id
+                title
+                availableForSale
               }
             }
           }
@@ -68,7 +70,7 @@ interface ShopifyProductNode {
     maxVariantPrice: { amount: string };
   };
   featuredImage: { url: string } | null;
-  variants: { edges: { node: { id: string } }[] };
+  variants: { edges: { node: { id: string; title: string; availableForSale: boolean } }[] };
 }
 
 // Extract the numeric id from a Shopify GID.
@@ -121,11 +123,21 @@ async function upsertProductEmbedding(
 
   const priceMin = parseFloat(product.priceRangeV2.minVariantPrice.amount);
   const priceMax = parseFloat(product.priceRangeV2.maxVariantPrice.amount);
-  const variantId = numericIdFromGid(product.variants?.edges?.[0]?.node?.id);
+
+  // Build the variant list (for the storefront selector) and pick the default.
+  const variantList = (product.variants?.edges ?? [])
+    .map((e) => ({
+      id: numericIdFromGid(e.node.id),
+      title: e.node.title,
+      available: e.node.availableForSale,
+    }))
+    .filter((v): v is { id: string; title: string; available: boolean } => Boolean(v.id));
+  const variantId = variantList[0]?.id ?? null;
+  const variantsJson = JSON.stringify(variantList);
 
   await prisma.$executeRaw`
     INSERT INTO product_embeddings
-      (shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, image_url, embedding, synced_at)
+      (shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, variants, image_url, embedding, synced_at)
     VALUES (
       ${product.id},
       ${product.title},
@@ -135,6 +147,7 @@ async function upsertProductEmbedding(
       ${priceMax},
       ${product.handle || null},
       ${variantId},
+      ${variantsJson}::jsonb,
       ${product.featuredImage?.url || null},
       ${vectorStr}::vector,
       NOW()
@@ -147,6 +160,7 @@ async function upsertProductEmbedding(
       price_max    = EXCLUDED.price_max,
       handle       = EXCLUDED.handle,
       variant_id   = EXCLUDED.variant_id,
+      variants     = EXCLUDED.variants,
       image_url    = EXCLUDED.image_url,
       embedding    = EXCLUDED.embedding,
       synced_at    = NOW()

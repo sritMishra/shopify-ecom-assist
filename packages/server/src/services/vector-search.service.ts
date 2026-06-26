@@ -29,6 +29,7 @@ interface ProductRow {
   price_max: number | null;
   handle: string | null;
   variant_id: string | null;
+  variants: Array<{ id: string; title: string; available: boolean }> | null;
   image_url: string | null;
 }
 
@@ -53,6 +54,7 @@ function rowToProduct(row: ProductRow, currencyCode: string): Product {
     tags: row.tags ?? [],
     handle: row.handle ?? '',
     variantId: row.variant_id ?? null,
+    variants: Array.isArray(row.variants) ? row.variants : [],
     price: {
       min: {
         amount: row.price_min ?? 0,
@@ -108,7 +110,7 @@ export async function searchByVector(params: SearchProductsParams): Promise<Prod
     // The <=> operator is pgvector's cosine distance — ORDER BY ASC = most similar first.
     // Each WHERE condition is a no-op when its filter value is null.
     const rows = await prisma.$queryRaw<ProductRow[]>`
-      SELECT shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, image_url,
+      SELECT shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, variants, image_url,
              embedding <=> ${vectorStr}::vector AS cosine_distance
       FROM product_embeddings
       WHERE (${filterType}::text IS NULL OR product_type = ${filterType}::text)
@@ -131,7 +133,7 @@ export async function searchByVector(params: SearchProductsParams): Promise<Prod
   // --- Fallback: no query text — apply hard filters only, order by price -----
   // Handles "show me all supplements under 500" where there is no semantic query.
   const rows = await prisma.$queryRaw<ProductRow[]>`
-    SELECT shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, image_url
+    SELECT shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, variants, image_url
     FROM product_embeddings
     WHERE (${filterType}::text IS NULL OR product_type = ${filterType}::text)
       AND (${filterMin}::float8 IS NULL OR price_min >= ${filterMin}::float8)
