@@ -12,6 +12,14 @@ include_config_on_deploy = true
 [webhooks]
 api_version = "2026-07"
 
+[app_proxy]
+# Storefront /apps/assistant/* → this URL. Shopify strips the subpath and
+# appends the rest, so /apps/assistant/chat → <url>/chat.
+# DEV: this is the ngrok tunnel to the local Express server (changes on restart).
+url = "https://random-shrill-legacy.ngrok-free.dev/api/storefront"
+prefix = "apps"
+subpath = "assistant"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = ""

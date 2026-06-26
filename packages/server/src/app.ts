@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 
 import chatRouter from './routes/chat.route';
+import storefrontRouter from './routes/storefront.route';
 import syncRouter from './routes/sync.route';
 import logger from './utils/logger';
 
@@ -20,5 +21,6 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/chat', chatRouter);
 app.use('/api/sync', syncRouter);
+app.use('/api/storefront', storefrontRouter);
 
 export default app;

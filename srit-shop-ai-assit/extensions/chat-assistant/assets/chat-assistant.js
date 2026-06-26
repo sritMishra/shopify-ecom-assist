@@ -1,7 +1,8 @@
-// AI Shopping Assistant — storefront widget (Step B: UI shell only).
-// Renders a floating launcher + chat panel. Not wired to the backend yet —
-// that's Step C (App Proxy → Express /api/chat). Kept dependency-free (vanilla
-// JS) so it runs directly from Shopify's CDN with no build step.
+// AI Shopping Assistant — storefront widget (Step C: wired to backend).
+// Calls the Express backend THROUGH the Shopify App Proxy (same-origin):
+//   POST /apps/assistant/chat  → Shopify → ngrok → /api/storefront/chat
+// Non-streaming for now: backend returns { reply, products }.
+// Dependency-free vanilla JS so it runs from Shopify's CDN with no build step.
 
 (function () {
   var root = document.getElementById('srit-chat-root');
@@ -11,12 +12,15 @@
   var title = root.dataset.title || 'Shopping Assistant';
   var greeting = root.dataset.greeting || 'Hi! How can I help you shop today?';
 
+  var ENDPOINT = '/apps/assistant/chat';
+  var history = []; // [{ role, content }] — sent each request for context
+
   // --- Launcher button ------------------------------------------------------
   var launcher = document.createElement('button');
   launcher.id = 'srit-chat-launcher';
   launcher.style.background = accent;
   launcher.setAttribute('aria-label', 'Open shopping assistant');
-  launcher.innerHTML = '&#128172;'; // speech balloon
+  launcher.innerHTML = '&#128172;';
 
   // --- Panel ----------------------------------------------------------------
   var panel = document.createElement('div');
@@ -43,7 +47,7 @@
   // --- Helpers --------------------------------------------------------------
   function escapeHtml(s) {
     var d = document.createElement('div');
-    d.textContent = s;
+    d.textContent = s == null ? '' : s;
     return d.innerHTML;
   }
 
@@ -53,8 +57,60 @@
     if (who === 'user') el.style.background = accent;
     el.textContent = text;
     messages.appendChild(el);
-    messages.scrollTop = messages.scrollHeight;
+    scrollDown();
     return el;
+  }
+
+  function scrollDown() {
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function formatPrice(p) {
+    if (!p || !p.price || !p.price.min) return '';
+    var min = p.price.min,
+      max = p.price.max;
+    function fmt(m) {
+      if (!m) return '';
+      try {
+        return m.currencyCode
+          ? new Intl.NumberFormat(undefined, { style: 'currency', currency: m.currencyCode }).format(m.amount)
+          : String(m.amount);
+      } catch (e) {
+        return String(m.amount);
+      }
+    }
+    if (max && max.amount !== min.amount) return fmt(min) + ' – ' + fmt(max);
+    return fmt(min);
+  }
+
+  function renderProducts(products) {
+    if (!products || !products.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'srit-products';
+    products.forEach(function (p) {
+      var card = document.createElement('div');
+      card.className = 'srit-product';
+      var img = p.image && p.image.url
+        ? '<img class="srit-product-img" src="' + escapeHtml(p.image.url) + '" alt="' + escapeHtml(p.title) + '" loading="lazy" />'
+        : '';
+      card.innerHTML =
+        img +
+        '<div class="srit-product-body">' +
+          '<div class="srit-product-title">' + escapeHtml(p.title) + '</div>' +
+          '<div class="srit-product-price">' + escapeHtml(formatPrice(p)) + '</div>' +
+          (p.url
+            ? '<a class="srit-product-link" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener noreferrer">View Product →</a>'
+            : '') +
+        '</div>';
+      wrap.appendChild(card);
+    });
+    messages.appendChild(wrap);
+    scrollDown();
+  }
+
+  function setBusy(busy) {
+    input.disabled = busy;
+    sendBtn.disabled = busy;
   }
 
   function openPanel() {
@@ -66,16 +122,36 @@
     panel.classList.remove('srit-open');
   }
 
-  function handleSend() {
+  async function handleSend() {
     var text = input.value.trim();
     if (!text) return;
+
     addMessage(text, 'user');
+    history.push({ role: 'user', content: text });
     input.value = '';
-    // Step C will replace this stub with a streamed reply from /api/chat.
-    addMessage(
-      "I'm connected to the storefront, but not to the catalog yet — that's the next step. 🔌",
-      'assistant'
-    );
+    setBusy(true);
+
+    var typing = addMessage('…', 'assistant');
+
+    try {
+      var res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+
+      typing.textContent = data.reply || "Sorry, I couldn't find an answer.";
+      history.push({ role: 'assistant', content: data.reply || '' });
+      renderProducts(data.products);
+    } catch (err) {
+      typing.textContent = 'Sorry — something went wrong. Please try again.';
+    } finally {
+      setBusy(false);
+      input.focus();
+      scrollDown();
+    }
   }
 
   // --- Events ---------------------------------------------------------------
@@ -85,6 +161,6 @@
   panel.querySelector('#srit-chat-close').addEventListener('click', closePanel);
   sendBtn.addEventListener('click', handleSend);
   input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') handleSend();
+    if (e.key === 'Enter' && !sendBtn.disabled) handleSend();
   });
 })();
