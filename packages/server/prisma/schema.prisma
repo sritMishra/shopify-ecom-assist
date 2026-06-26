@@ -68,6 +68,12 @@ model ProductEmbedding {
   // Used to build the product URL: /products/{handle}
   handle String?
 
+  // Default (first) variant's NUMERIC id e.g. "41234567890".
+  // Used by the storefront widget to add the product to the cart via
+  // /cart/add.js (which needs the numeric variant id, not the GraphQL GID).
+  // Null until the product is (re-)synced after this column was added.
+  variantId String? @map("variant_id")
+
   // URL of the product's featured image — for product cards in the UI.
   imageUrl String? @map("image_url")
 

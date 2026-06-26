@@ -15,6 +15,8 @@ export interface Product {
   productType: string;
   tags: string[];
   handle: string;
+  // Default variant's numeric id for /cart/add.js — null if not yet synced.
+  variantId: string | null;
   price: {
     min: ProductPrice;
     max: ProductPrice;

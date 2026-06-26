@@ -162,9 +162,25 @@
   color: #555;
   margin: 2px 0;
 }
+.srit-product-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
 .srit-product-link {
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   color: inherit;
 }
+.srit-add-cart {
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.srit-add-cart:disabled { opacity: 0.7; cursor: default; }

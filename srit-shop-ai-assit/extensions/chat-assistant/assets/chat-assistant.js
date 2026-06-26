@@ -83,6 +83,31 @@
     return fmt(min);
   }
 
+  // Add a product to the NATIVE Shopify cart via the storefront AJAX Cart API.
+  // /cart/add.js is same-origin on the storefront and needs the numeric variant id.
+  function addToCart(variantId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    fetch('/cart/add.js', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ id: Number(variantId), quantity: 1 }] }),
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('add failed');
+        return r.json();
+      })
+      .then(function () {
+        btn.textContent = 'Added ✓';
+        // Nudge themes that listen for cart updates to refresh their cart UI.
+        document.dispatchEvent(new CustomEvent('cart:refresh'));
+      })
+      .catch(function () {
+        btn.textContent = 'Try again';
+        btn.disabled = false;
+      });
+  }
+
   function renderProducts(products) {
     if (!products || !products.length) return;
     var wrap = document.createElement('div');
@@ -98,10 +123,27 @@
         '<div class="srit-product-body">' +
           '<div class="srit-product-title">' + escapeHtml(p.title) + '</div>' +
           '<div class="srit-product-price">' + escapeHtml(formatPrice(p)) + '</div>' +
-          (p.url
-            ? '<a class="srit-product-link" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener noreferrer">View Product →</a>'
-            : '') +
+          '<div class="srit-product-actions">' +
+            (p.url
+              ? '<a class="srit-product-link" href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener noreferrer">View →</a>'
+              : '') +
+          '</div>' +
         '</div>';
+
+      // Add-to-cart button — only when we have a variant id (synced products).
+      if (p.variantId) {
+        var actions = card.querySelector('.srit-product-actions');
+        var btn = document.createElement('button');
+        btn.className = 'srit-add-cart';
+        btn.type = 'button';
+        btn.textContent = 'Add to cart';
+        btn.style.background = accent;
+        btn.addEventListener('click', function () {
+          addToCart(p.variantId, btn);
+        });
+        actions.appendChild(btn);
+      }
+
       wrap.appendChild(card);
     });
     messages.appendChild(wrap);

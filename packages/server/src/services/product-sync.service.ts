@@ -42,6 +42,13 @@ const FETCH_ALL_PRODUCTS_QUERY = `
           featuredImage {
             url
           }
+          variants(first: 1) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
         }
       }
     }
@@ -61,6 +68,14 @@ interface ShopifyProductNode {
     maxVariantPrice: { amount: string };
   };
   featuredImage: { url: string } | null;
+  variants: { edges: { node: { id: string } }[] };
+}
+
+// Extract the numeric id from a Shopify GID.
+// "gid://shopify/ProductVariant/41234567890" → "41234567890"
+function numericIdFromGid(gid: string | null | undefined): string | null {
+  if (!gid) return null;
+  return gid.split('/').pop() ?? null;
 }
 
 interface ShopifyProductsResponse {
@@ -106,10 +121,11 @@ async function upsertProductEmbedding(
 
   const priceMin = parseFloat(product.priceRangeV2.minVariantPrice.amount);
   const priceMax = parseFloat(product.priceRangeV2.maxVariantPrice.amount);
+  const variantId = numericIdFromGid(product.variants?.edges?.[0]?.node?.id);
 
   await prisma.$executeRaw`
     INSERT INTO product_embeddings
-      (shopify_id, title, product_type, tags, price_min, price_max, handle, image_url, embedding, synced_at)
+      (shopify_id, title, product_type, tags, price_min, price_max, handle, variant_id, image_url, embedding, synced_at)
     VALUES (
       ${product.id},
       ${product.title},
@@ -118,6 +134,7 @@ async function upsertProductEmbedding(
       ${priceMin},
       ${priceMax},
       ${product.handle || null},
+      ${variantId},
       ${product.featuredImage?.url || null},
       ${vectorStr}::vector,
       NOW()
@@ -129,6 +146,7 @@ async function upsertProductEmbedding(
       price_min    = EXCLUDED.price_min,
       price_max    = EXCLUDED.price_max,
       handle       = EXCLUDED.handle,
+      variant_id   = EXCLUDED.variant_id,
       image_url    = EXCLUDED.image_url,
       embedding    = EXCLUDED.embedding,
       synced_at    = NOW()
