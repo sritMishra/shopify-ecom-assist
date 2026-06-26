@@ -1,0 +1,122 @@
+/* AI Shopping Assistant widget — scoped under #srit-chat-* ids to avoid
+   clashing with theme styles. No external fonts/assets (CSP-safe). */
+
+#srit-chat-launcher {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+#srit-chat-launcher:hover { transform: scale(1.06); }
+
+#srit-chat-panel {
+  position: fixed;
+  bottom: 88px;
+  right: 20px;
+  width: 370px;
+  max-width: calc(100vw - 40px);
+  height: 540px;
+  max-height: calc(100vh - 120px);
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  z-index: 2147483000;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+#srit-chat-panel.srit-open { display: flex; }
+
+#srit-chat-header {
+  color: #fff;
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#srit-chat-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.85;
+}
+#srit-chat-close:hover { opacity: 1; }
+
+#srit-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  background: #f7f7f9;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.srit-msg {
+  max-width: 80%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.srit-msg-assistant {
+  align-self: flex-start;
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #e6e6e9;
+  border-bottom-left-radius: 4px;
+}
+.srit-msg-user {
+  align-self: flex-end;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+#srit-chat-inputrow {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #ececed;
+  background: #fff;
+}
+#srit-chat-input {
+  flex: 1;
+  border: 1px solid #d6d6da;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+#srit-chat-input:focus { border-color: #999; }
+#srit-chat-send {
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#srit-chat-send:disabled { opacity: 0.5; cursor: default; }
