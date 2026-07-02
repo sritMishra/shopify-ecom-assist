@@ -39,9 +39,10 @@ shopify-ecom-assistant/
 │   ├── requirements.md       # Full product requirements and phase roadmap
 │   └── tech-stack.md         # Technology decisions
 ├── packages/
-│   ├── server/               # Express API (Node.js + TypeScript)
-│   ├── client/               # React frontend (Vite + MUI) — not started yet
+│   ├── server/               # Express API (Node.js + TypeScript) — the backend "brain"
+│   ├── client/               # React standalone UI (Vite + MUI) — superseded by the storefront widget
 │   └── shared/               # Shared Zod schemas + TypeScript types — not started yet
+├── srit-shop-ai-assit/       # Shopify app (extension-only) + Theme App Extension (storefront chat widget)
 ├── package.json              # npm workspaces root
 └── CLAUDE.md                 # This file
 ```
@@ -53,7 +54,7 @@ shopify-ecom-assistant/
 **Server:** Node.js 22, Express 4, TypeScript, Prisma (PostgreSQL), Pino, Zod, dotenv  
 **Client:** React 18, Vite, MUI v6, TanStack Query, React Hook Form, Zod, Axios  
 **AI:** OpenAI (tool calling + streaming) with an AIProvider interface for future swapping  
-**Shopify:** Admin GraphQL API (server-side), Storefront API (future)  
+**Shopify:** Admin GraphQL API (sync/search), Storefront **AJAX Cart API** (`/cart/add.js`, native cart). Embedded in the storefront via a **Theme App Extension + App Proxy** (app scaffold in `srit-shop-ai-assit/`)  
 **Package manager:** npm workspaces  
 **Infra:** Docker Compose (deferred — added after core server/client are working)
 
@@ -90,6 +91,8 @@ OPENAI_MODEL=gpt-4o-mini
 SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
 SHOPIFY_ACCESS_TOKEN=
 SHOPIFY_API_VERSION=2024-01
+SHOPIFY_API_SECRET=        # app client secret — verifies App Proxy request signatures
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 ---
@@ -99,8 +102,9 @@ SHOPIFY_API_VERSION=2024-01
 | Method | Path | Status | Description |
 |--------|------|--------|-------------|
 | GET | `/api/health` | Done | Health check |
-| POST | `/api/chat` | Done | SSE streaming chat endpoint |
+| POST | `/api/chat` | Done | SSE streaming chat endpoint (standalone React client) |
 | POST | `/api/sync/products` | Done | Trigger full product embedding sync into pgvector |
+| POST | `/api/storefront/chat` | Done | Storefront widget endpoint via App Proxy — HMAC-verified, returns `{ reply, products }` (non-streaming) |
 
 ---
 
@@ -161,8 +165,62 @@ Must be run whenever products are added/changed until webhook handler (Step 7) i
 
 ### Pending (non-Phase-2)
 - [ ] Shared types package (`packages/shared`) — extract when client setup begins
-- [ ] React client setup (`packages/client`)
-- [ ] Chat UI (ChatWindow, MessageList, MessageInput, ProductCard)
+- [x] React client setup (`packages/client`) — built (now superseded by the storefront widget)
+- [x] Chat UI (ChatWindow, MessageList, MessageInput, ProductCard)
+
+### Storefront Embed + Cart & Checkout — Done
+> The assistant is now **embedded in the Shopify storefront** (not just standalone) and can
+> **transact**. This partially advances Phase 6 (it's a real Shopify app now) but is **not yet
+> multi-tenant** — still single-store via `.env`, and the backend is exposed in dev via an **ngrok**
+> tunnel (kill it by deploying the backend — see Phase 6).
+
+- [x] Shopify app `srit-shop-ai-assit/` (extension-only) created + installed on the dev store
+- [x] Theme App Extension — app embed block renders a floating chat bubble on the storefront (vanilla JS/CSS, no build step)
+- [x] App Proxy: storefront `/apps/assistant/*` → ngrok → Express `/api/storefront/*` (same-origin, no CORS)
+- [x] `POST /api/storefront/chat` — App-Proxy HMAC verified, runs vector search + LLM, returns `{ reply, products }` (non-streaming, `generateText`)
+- [x] `SHOPIFY_API_SECRET` — verifies App Proxy signatures (dev-bypass when unset)
+- [x] `product_embeddings` schema: added `variant_id` + `variants` (JSONB) columns (migrations `add_variant_id`, `add_variants_json`); re-synced 19 products
+- [x] Widget product cards: variant selector (multi-variant products) + "Add to cart" → native `/cart/add.js`
+- [ ] Streaming reply (deferred — "C5": storefront endpoint is non-streaming for now)
+- [ ] Stock/status filtering — recommend only active, available products (→ Phase 7; `variants[].available` is stored but not yet enforced)
+- [ ] Deploy backend to a real host to remove the ngrok dev tunnel (→ Phase 6)
+
+**To run the storefront stack in dev:** (1) `npm run dev:server`; (2) `ngrok http 3001` and put the
+URL in `srit-shop-ai-assit/shopify.app.toml` `[app_proxy].url` (as `<url>/api/storefront`);
+(3) `shopify app dev` (preview) or `shopify app deploy` (publish to live theme) from
+`srit-shop-ai-assit/`; (4) enable the app embed in the theme editor → App embeds.
+
+### Phase 5 — Analytics — Pending
+> Measures **business value** (is the assistant driving discovery + sales?) — distinct from Phase 8
+> which measures AI *correctness*. Two audiences: the **merchant** (in-app dashboard) and **us**
+> (operator/cost view). **Reframe:** in NL chat there are no "keywords" — cluster query embeddings
+> into **intents** for meaningful "what are people asking for" reporting.
+
+**What to track — merchant-facing:**
+- [ ] Engagement — conversations, unique/returning shoppers, messages per convo, adoption rate (% of visitors who open it), trends
+- [ ] Intent & demand — top **intent clusters** (via query-embedding clustering), trending intents, refinement chains
+- [ ] ⭐ Catalog gaps — zero-result queries, low-confidence queries (cosine > ~0.5), products never surfaced
+- [ ] Conversion impact — card clicks, add-to-cart from assistant, **assisted conversions & revenue**, AOV vs store average
+
+**What to track — operator-facing:**
+- [ ] Cost / perf — tokens & **cost per conversation per tenant**, OpenAI vs Claude split, latency, error/timeout rates
+- [ ] Quality signals — % conversations ending in zero results, tool-call success rate
+
+**How to capture (event-driven):**
+- [ ] Emit structured events: `conversation_started`, `query_submitted` (embedding + result count + top cosine distance), `products_shown`, `product_clicked`, `add_to_cart`, `llm_call` (tokens/cost/latency/provider) — each tagged with `tenant_id` + session id + timestamp
+- [ ] Write events **async** (queue/Redis) — never block the chat response
+- [ ] Storage: start in PostgreSQL; move to a columnar/OLAP store (ClickHouse) or PostHog as volume grows
+- [ ] Conversion attribution — tie sessions to checkouts via Shopify **order webhooks** + a session id
+
+**Highest-value first:** catalog gaps (zero-result/low-confidence) · conversion attribution ·
+intent clusters · cost-per-conversation.
+
+> ⚠️ **Privacy:** shopper queries are user content (possible PII). Decide up front: raw vs aggregated
+> storage, retention window (e.g. raw 90 days, aggregates forever), and whether merchants see
+> individual sessions or only aggregates. Cheap to design in now, expensive to retrofit.
+
+> **Quick win available today:** `query_submitted` can log the top-1 cosine distance you already
+> compute — the zero-result/low-confidence catalog-gap report needs almost no new plumbing.
 
 ### Phase 6 — Multi-Tenant Productionization & Scale — Pending
 > Full detail: `docs/phase-6/phase-6.md`. Turns the single-store dev app into a multi-tenant SaaS
@@ -250,7 +308,27 @@ traffic + always-on metrics + user feedback → feed production failures back in
 
 ## Key Architectural Decisions
 
-**Standalone app** — not embedded in a Shopify theme. Runs as a separate web app.
+**Embedded in the storefront (updated — was "standalone")** — originally a separate web app; now
+**embedded in the Shopify storefront** via a **Theme App Extension** (an app-embed chat bubble). The
+Express backend is reused unchanged; the storefront widget reaches it through an **App Proxy**
+(`/apps/assistant/*` → `/api/storefront/*`) so calls are same-origin (no CORS) and Shopify-signed.
+Chose an **extension-only Shopify app + keep Express** over the Remix template to reuse all existing
+backend work. The standalone React client (`packages/client`) is superseded for the shopper.
+
+**App Proxy + HMAC auth** — the storefront endpoint is public, so every request is verified against
+the app's `SHOPIFY_API_SECRET` (App Proxy signature: HMAC-SHA256 over sorted query params). Only
+Shopify-proxied traffic is accepted; protects OpenAI spend + prevents abuse.
+
+**Native cart via AJAX Cart API** — because the widget runs on the storefront, "Add to cart" calls
+the theme's own `/cart/add.js` (the native cart), avoiding Storefront API tokens / cart permalinks.
+Requires the **numeric** variant id (stored in `product_embeddings.variant_id` / `.variants`).
+
+**Storefront endpoint is non-streaming (for now)** — `/api/storefront/chat` returns full
+`{ reply, products }` JSON to de-risk streaming-through-App-Proxy. Streaming is a deferred follow-up.
+
+**Shopify does not host the backend** — even a Shopify app's server is self-hosted; Shopify hosts
+only the extension (CDN) + app record. In dev, **ngrok** stands in for the backend's public URL;
+production replaces it with a deployed host (Phase 6).
 
 **Stateless chat** — conversation history is sent from the client with every request. No server-side session storage for Phase 1.
 

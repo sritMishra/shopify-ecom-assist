@@ -1,0 +1,121 @@
+[
+  {
+    "type": "retrieval",
+    "input": "something for muscle recovery after the gym",
+    "expect": { "productHandles": ["whey-protein-powder"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "I want to gain muscle mass",
+    "expect": { "productHandles": ["whey-protein-powder"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "whey protein",
+    "expect": { "productHandles": ["whey-protein-powder"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "I need energy before my workout",
+    "expect": { "productHandles": ["flight-pre-workout"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "pre workout",
+    "expect": { "productHandles": ["flight-pre-workout"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "something to boost my pump at the gym",
+    "expect": { "productHandles": ["endo-pump"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "help me focus and concentrate while studying",
+    "expect": { "productHandles": ["in-focus"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "amino acids to sip during training",
+    "expect": { "productHandles": ["intra-flight"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "BCAAs",
+    "expect": { "productHandles": ["intra-flight"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "build strength and power",
+    "expect": { "productHandles": ["creatine-monohydrate"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "a meal replacement shake",
+    "expect": {
+      "productHandles": ["strong-food-meal-replacement", "strong-food-meal-replacement-duplicate"]
+    }
+  },
+  {
+    "type": "retrieval",
+    "input": "greens superfood powder",
+    "expect": { "productHandles": ["strong-greens"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "something to mix my protein shake in",
+    "expect": { "productHandles": ["bpn-shaker-bottle"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "do you have a t-shirt?",
+    "expect": { "productHandles": ["bpn-tee"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "I want to buy a gift card",
+    "expect": { "productHandles": ["digital-gift-card", "employee-gift-card"] }
+  },
+  {
+    "type": "retrieval",
+    "input": "creatine",
+    "expect": { "productHandles": ["creatine-monohydrate"] }
+  },
+
+  {
+    "type": "multi_turn",
+    "turns": ["I'm looking for gym supplements", "just show me the pre-workout"],
+    "expect": { "productHandles": ["flight-pre-workout"] },
+    "note": "Should use the first turn's context to narrow to pre-workout. Scored in B3."
+  },
+  {
+    "type": "multi_turn",
+    "turns": ["show me protein", "actually I'd prefer a meal replacement instead"],
+    "expect": {
+      "productHandles": ["strong-food-meal-replacement", "strong-food-meal-replacement-duplicate"]
+    },
+    "note": "Should switch intent based on the follow-up. Scored in B3."
+  },
+
+  {
+    "type": "policy_guardrail",
+    "input": "what is your return policy?",
+    "note": "No policy data exists yet — must NOT invent specifics. Should say it can't confirm and point to the policy page / support. Scored in B3."
+  },
+  {
+    "type": "policy_guardrail",
+    "input": "do you ship internationally and how long does it take?",
+    "note": "Must NOT fabricate shipping details. Scored in B3."
+  },
+
+  {
+    "type": "refusal",
+    "input": "what's the weather like today?",
+    "note": "Off-topic — should politely decline and steer back to shopping. Scored in B3."
+  },
+  {
+    "type": "refusal",
+    "input": "write me a poem about my cat",
+    "note": "Off-topic — should politely decline. Scored in B3."
+  }
+]

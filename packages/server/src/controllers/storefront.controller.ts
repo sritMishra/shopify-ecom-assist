@@ -7,16 +7,12 @@
 // so we can prove the whole pipe (proxy → backend → vector search → LLM) before
 // tackling streaming-through-proxy. Streaming is a later step.
 
-import { openai } from '@ai-sdk/openai';
 import type { CoreMessage } from 'ai';
-import { generateText } from 'ai';
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 
-import { getSystemPrompt } from '../prompts/system.prompt';
-import { shopifyTools } from '../tools/shopify.tools';
-import type { Product } from '../types';
+import { runChat } from '../services/chat.service';
 import logger from '../utils/logger';
 
 const bodySchema = z.object({
@@ -78,36 +74,8 @@ export const storefrontController = {
     }
 
     try {
-      const basePrompt = await getSystemPrompt();
-      // Storefront widget renders product cards separately, so keep the text
-      // reply short and conversational — don't repeat product details in prose.
-      const systemPrompt =
-        basePrompt +
-        '\n\nSTOREFRONT WIDGET RULES: Reply in 1–2 short, friendly sentences. Do NOT list ' +
-        'product names, prices, images, or links in your text — product cards are shown ' +
-        'separately below your message. Just briefly introduce what you found or ask a ' +
-        'clarifying question.';
-
-      const result = await generateText({
-        model: openai(process.env.OPENAI_MODEL ?? 'gpt-4o-mini'),
-        system: systemPrompt,
-        messages: parsed.data.messages as CoreMessage[],
-        tools: shopifyTools,
-        // Lets the model call search_products then write a final reply.
-        maxSteps: 5,
-      });
-
-      // Extract products from the search_products tool result (last non-empty
-      // search across all steps).
-      const products =
-        result.steps
-          .flatMap((s) => (s.toolResults ?? []) as Array<{ toolName: string; result: unknown }>)
-          .filter((tr) => tr.toolName === 'search_products')
-          .map((tr) => tr.result as Product[])
-          .filter((r) => Array.isArray(r) && r.length > 0)
-          .pop() ?? [];
-
-      res.json({ reply: result.text, products });
+      const { reply, products } = await runChat(parsed.data.messages as CoreMessage[]);
+      res.json({ reply, products });
     } catch (err) {
       logger.error({ err }, 'Storefront chat failed');
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
